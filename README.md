@@ -4,7 +4,6 @@ Orchestriertes Multi-Agenten-System zur automatisierten Prüfung digitaler Web-A
 
 Entwickelt als Bachelorarbeit im Studiengang Medieninformatik (HTWK Leipzig).
 
----
 
 ## Motivation
 
@@ -14,7 +13,6 @@ Klassische Tools wie axe-core oder Pa11y sind stark bei syntaktischer Code-Prüf
 
 **A11y-Orchestra** verbindet regelbasierte Prüfung mit Vision-LLMs und RAG, um genau diese semantische Lücke zu schließen - und Barrierefreiheitstests für Entwicklungsteams ohne Accessibility-Expertise zugänglich zu machen.
 
----
 
 ## Systemarchitektur
 
@@ -40,7 +38,6 @@ Worker-Agents sind eigenständige n8n-Sub-Workflows, die vom Manager als Tools a
 - **Chat-Interface**: Steuerung und Report-Ausgabe
 - **PDF-Reports**: Jeder Agent erzeugt via `pdf-lib` einen Einzel-Report (Upload zu Google Drive). Der Manager konsolidiert alles in einem Gesamtbericht
 
----
 
 ## Tech Stack
 
@@ -59,7 +56,6 @@ Worker-Agents sind eigenständige n8n-Sub-Workflows, die vom Manager als Tools a
 - `workflows/` - bereinigte n8n-Workflow-JSONs zum Import
 - `agent-reports/` - Beispiel-PDFs aus realen Testläufen
 
----
 
 ## Infrastruktur
 
@@ -72,7 +68,6 @@ Docker Compose orchestriert n8n (inkl. Playwright-Browser) und Qdrant in einem i
 - Zustandslose Prozesse; Persistenz extern
 - Dev/Prod-Parität via Docker
 
----
 
 ## Evaluation
 
@@ -80,7 +75,6 @@ Docker Compose orchestriert n8n (inkl. Playwright-Browser) und Qdrant in einem i
 - **Robustheit**: Retry-Schleifen im Manager fangen fehlerhafte JSON-Antworten ab
 - **Grenzfälle**: Timing-Probleme bei SPAs und Scroll-Obstruktionen durch Sticky-Header adressiert
 
----
 
 ## Setup
 
