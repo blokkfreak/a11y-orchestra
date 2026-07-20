@@ -1,0 +1,17 @@
+{
+  "name": "n8n-accessibility-agents",
+  "version": "0.1.0",
+  "description": "Lightweight HTTP agent servers for accessibility checks (GAA, VFA, CSA) designed to be called from n8n",
+  "main": "index.js",
+  "scripts": {
+    "start:gaa": "node agents/gaa-server.js",
+    "start:vfa": "node agents/vfa-server.js",
+    "start:csa": "node agents/csa-server.js"
+  },
+  "dependencies": {
+    "body-parser": "^1.20.3",
+    "express": "^4.21.2",
+    "node-fetch": "^2.7.0",
+    "playwright": "^1.56.1"
+  }
+}

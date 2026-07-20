@@ -1,0 +1,9 @@
+node_modules/
+.env
+.DS_Store
+Thumbs.db
+desktop.ini
+runner-results/
+*.log
+.vscode/
+.idea/

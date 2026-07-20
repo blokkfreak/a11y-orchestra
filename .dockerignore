@@ -1,0 +1,14 @@
+node_modules
+.git
+.gitignore
+*.log
+.env
+.vscode
+.idea
+*.md
+backup-workflows
+runner-results
+.npm
+.cache
+dist
+build

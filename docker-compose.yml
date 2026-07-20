@@ -1,0 +1,52 @@
+services:
+  n8n:
+    image: "n8n-a11y:latest"
+    build: .
+    entrypoint: ["/usr/local/bin/n8n"]
+    ports:
+      - "5678:5678"
+    environment:
+      N8N_HOST: "0.0.0.0"
+      N8N_PORT: "5678"
+      N8N_PROTOCOL: "http"
+      NODE_ENV: "production"
+      WEBHOOK_URL: "http://localhost:5678"
+      GENERIC_TIMEZONE: "${GENERIC_TIMEZONE:-Europe/Berlin}"
+      PUPPETEER_EXECUTABLE_PATH: "/ms-playwright/chromium-1194/chrome-linux/chrome"
+      PLAYWRIGHT_BROWSERS_PATH: "/ms-playwright"
+      PATH: "/usr/local/runners:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+      N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS: "true"
+      QDRANT_URL: "http://qdrant:6333"
+      NODE_FUNCTION_ALLOW_EXTERNAL: "pdf-lib"
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - n8n_cache:/home/node/.cache
+      - playwright-browser:/ms-playwright
+      - ./runner-results:/tmp
+    shm_size: "1gb"
+    depends_on:
+      qdrant:
+        condition: service_started
+    networks:
+      - backend
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    restart: always
+    ports:
+      - "6333:6333"   # HTTP API
+      - "6334:6334"   # gRPC
+    volumes:
+      - qdrant_storage:/qdrant/storage
+    networks:
+      - backend
+
+volumes:
+  n8n_data:
+  n8n_cache:
+  playwright-browser:
+  qdrant_storage:
+
+networks:
+  backend:
+    driver: bridge

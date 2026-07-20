@@ -1,0 +1,609 @@
+{
+  "name": "GAA",
+  "nodes": [
+    {
+      "parameters": {
+        "executeOnce": false,
+        "command": "=bash -lc \"PA11Y_OPTIONS='{{ JSON.stringify($json.ctx || {}) }}' node /usr/local/bin/pa11y-runner.js '{{ $json.url }}'\""
+      },
+      "id": "0acbce70-6257-48db-b1c0-fd7dba0c40b1",
+      "name": "Pa11y",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        464,
+        128
+      ],
+      "executeOnce": false,
+      "alwaysOutputData": false,
+      "retryOnFail": false,
+      "notesInFlow": false
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1248,
+        224
+      ],
+      "id": "15e56fd5-a03e-4850-8aa6-bb39c9448173",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "fileSelector": "={{ $json.path }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        832,
+        128
+      ],
+      "id": "1d3a4c2c-5260-4571-8c51-89ae44bbb92e",
+      "name": "lese Pa11y-Ergebnisse"
+    },
+    {
+      "parameters": {
+        "fileSelector": "={{ $json.path }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        832,
+        336
+      ],
+      "id": "ce91305b-d96f-42b0-bde5-15b2c5426687",
+      "name": "lese axe-Ergebnisse"
+    },
+    {
+      "parameters": {
+        "jsCode": "const rawStdout = $input.first().json.stdout || '';\n\nlet meta;\ntry {\n  meta = JSON.parse(rawStdout);\n} catch (e) {\n  throw new Error('Pa11y stdout ist kein gültiges JSON: ' + e.message);\n}\n\nif (!meta.path) {\n  throw new Error('Pa11y-Runner hat keinen Pfad zurückgegeben.');\n}\n\nreturn {\n  path: meta.path,\n  size: meta.size,\n  source: meta.source || 'pa11y',\n  url: $('Pa11y').first().json.url\n};\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        640,
+        128
+      ],
+      "id": "9afc75b2-6a17-4499-8808-e85be9d0a9bb",
+      "name": "Pfad extrahieren1"
+    },
+    {
+      "parameters": {
+        "operation": "fromJson",
+        "destinationKey": "axe-data",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        1008,
+        336
+      ],
+      "id": "af191108-3ef9-4de9-a362-758fa7b71571",
+      "name": "extract axe"
+    },
+    {
+      "parameters": {
+        "operation": "fromJson",
+        "destinationKey": "pa11y-data",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        1008,
+        128
+      ],
+      "id": "9454e765-b7c7-4198-929a-3ab0c99941bb",
+      "name": "extract pa11y"
+    },
+    {
+      "parameters": {
+        "jsCode": "// input: { exitCode, stderr, stdout, url? }\nconst meta = JSON.parse($input.first().json.stdout || '{}');\nreturn {\n  path: meta.path,\n  size: meta.size,\n  source: meta.source,\n  url: $('axe').first().json.url\n};\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        640,
+        336
+      ],
+      "id": "c762dfe5-b817-4d7d-ae6e-f9e992f2e430",
+      "name": "Pfad extrahieren2"
+    },
+    {
+      "parameters": {
+        "content": "# GA-Agent",
+        "height": 1040,
+        "width": 2800
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -128,
+        0
+      ],
+      "typeVersion": 1,
+      "id": "5de88516-d6f1-4e8b-9537-567b1e6e7e3a",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "inputDataFieldName": "report",
+        "name": "={{ 'test' + 'gaa-' + new Date().toISOString().slice(0,10) + '.pdf' }}",
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "YOUR_GDRIVE_FOLDER_ID",
+          "mode": "list",
+          "cachedResultName": "gaa-reports",
+          "cachedResultUrl": "https://drive.google.com/drive/folders/YOUR_GDRIVE_FOLDER_ID"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        2096,
+        224
+      ],
+      "id": "23b08be0-9891-4564-8d52-6ca72b4db75a",
+      "name": "Upload file",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "command": "=bash -lc \"node /usr/local/bin/axe-playwright-runner.js '{{ $json.url }}'\""
+      },
+      "id": "8f5738e9-6866-4d25-9be1-e015b656ab20",
+      "name": "axe",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        464,
+        336
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build Report (GAA) - Version für aggregierte Daten\n\nconst input = $input.first().json || {};\n\n// URL aus Manager-Agent holen, Fallback: input.url\nlet managerData = {};\ntry {\n  managerData = $('Manager-Agent').first().json || {};\n} catch (e) {\n  managerData = {};\n}\n\nlet url = 'unbekannte URL';\nconst urlCandidates = [\n  input.url,\n  managerData.url,\n];\n\nfor (const c of urlCandidates) {\n  if (typeof c === 'string' && c.trim()) {\n    url = c.trim();\n    break;\n  }\n}\n\n// NEU: Zugriff auf die aggregierten Ergebnisse aus dem vorherigen Node\nconst aggregatedResults = Array.isArray(input.aggregatedResults) ? input.aggregatedResults : [];\nconst stats = input.stats || { total_issues: 0, critical: 0, serious: 0 };\n\n// Ergebnis berechnen\nlet result = 'pass';\nif (stats.critical > 0 || stats.serious > 0) {\n  result = 'fail';\n} else if (stats.total_issues > 0) {\n  result = 'warning';\n}\n\n// Kurzfassung generieren\nlet summary;\nif (result === 'pass') {\n  summary =\n    'In den ausgewerteten Ergebnissen von axe-core und Pa11y wurden keine ' +\n    'kritischen oder schweren Findings identifiziert, die auf Probleme bei ' +\n    'der Erfüllung von WCAG 2.5.8 (Target Size – Minimum) hindeuten.';\n} else {\n  summary =\n    `Es wurden ${stats.total_issues} Findings identifiziert, davon ${stats.critical} kritisch und ${stats.serious} schwerwiegend.`;\n}\n\n// Markdown-Report bauen (dynamisch aus den aggregierten Gruppen)\nconst lines = [];\n\nlines.push('## Zusammenfassung');\nlines.push(summary, '');\nlines.push('## Detaillierte Findings (Aggregiert)', '');\n\nif (aggregatedResults.length === 0) {\n  lines.push('- Keine relevanten Fehler gefunden.', '');\n} else {\n  aggregatedResults.forEach((issue, index) => {\n    // Titelzeile: [CRITICAL] ID (Anzahl)\n    const icon = issue.impact === 'critical' ? '🔴' : (issue.impact === 'serious' ? '🟠' : '⚪');\n    const title = `### ${index + 1}. ${icon} [${issue.impact.toUpperCase()}] ${issue.id} (${issue.count}x)`;\n    \n    lines.push(title);\n    lines.push(`- **Tool:** ${issue.tool}`);\n    lines.push(`- **Beschreibung:** ${issue.description}`);\n    \n    lines.push(`- **Betroffene Elemente (Auszug):**`);\n    issue.selectors.forEach(sel => {\n       // Code-Block für Selektoren, damit Sonderzeichen nicht Markdown kaputt machen\n       lines.push(`  - \\`${sel}\\``);\n    });\n    \n    if (issue.count > 5) {\n        lines.push(`  - ... und ${issue.count - 5} weitere.`);\n    }\n    lines.push(''); // Leerzeile\n  });\n}\n\nconst reportMarkdown = lines.join('\\n');\n\n// Output für den Manager und PDF-Node\nreturn [\n  {\n    json: {\n      agent: 'GAA',\n      url,\n      wcag: ['2.5.8'],\n      result,\n      summary,\n      // Wir geben die aggregierten Details weiter, damit der Manager sie nutzen kann\n      details: {\n        stats: stats,\n        findings: aggregatedResults\n      },\n      reportMarkdown,\n    },\n  },\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1664,
+        224
+      ],
+      "id": "2959a2f1-0bc1-4c01-80e8-3921d7777fa4",
+      "name": "Build Report"
+    },
+    {
+      "parameters": {
+        "jsCode": "const { PDFDocument, StandardFonts, rgb } = require('pdf-lib');\n\n// --- Hilfsfunktionen ---\nfunction sanitize(text) {\n  if (!text) return '';\n  let t = String(text);\n  t = t.replace(/\\u202F/g, ' ');\n  // Bereinigung von nicht-druckbaren Zeichen\n  t = t.split('').map(ch => (ch.charCodeAt(0) > 255 ? ' ' : ch)).join('');\n  return t;\n}\n\nfunction cleanInline(text) {\n  if (!text) return '';\n  // Entfernt Markdown-Syntax wie **fett** oder `code` für das PDF\n  return text\n    .replace(/\\*\\*(.*?)\\*\\*/g, '$1')\n    .replace(/__(.*?)__/g, '$1')\n    .replace(/`([^`]+)`/g, '$1');\n}\n\nasync function run() {\n  const item = items[0];\n  const data = item.json || {};\n  const binary = item.binary || {};\n\n  // 1. Daten aus dem JSON mappen\n  const url = sanitize(data.url || 'unbekannte URL');\n  const agentName = \"GAA\";\n  const timestamp = new Date().toISOString().slice(0, 19).replace('T', ' ');\n\n  // WICHTIG: Zugriff auf die verschachtelten Statistiken\n  const stats = data.details?.stats || { total_issues: 0, critical: 0 };\n  \n  // WICHTIG: Wir nutzen den fertigen Markdown-Text aus dem vorherigen Node\n  const md = sanitize(data.reportMarkdown || '');\n\n  // PDF Setup\n  const pdfDoc = await PDFDocument.create();\n  let page = pdfDoc.addPage();\n  let { width, height } = page.getSize();\n\n  const fontRegular = await pdfDoc.embedFont(StandardFonts.Helvetica);\n  const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);\n\n  let cursorY = height - 40;\n\n  // --- Layout Helper ---\n  function ensureSpace(linesNeeded, fontSize = 11) {\n    if (cursorY - (linesNeeded * (fontSize + 4)) < 40) {\n      page = pdfDoc.addPage();\n      cursorY = height - 40;\n    }\n  }\n\n  function drawTextLine(text, opts = {}) {\n    const size = opts.size || 11;\n    const font = opts.font || fontRegular;\n    const color = opts.color || rgb(0, 0, 0);\n    const indent = opts.indent || 40;\n    const maxWidth = width - indent - 40;\n\n    const words = text.split(' ');\n    let line = '';\n\n    for (const w of words) {\n      const testLine = line ? line + ' ' + w : w;\n      const wWidth = font.widthOfTextAtSize(testLine, size);\n      if (wWidth > maxWidth) {\n        ensureSpace(1, size);\n        page.drawText(line, { x: indent, y: cursorY, size, font, color });\n        cursorY -= (size + 4);\n        line = w;\n      } else {\n        line = testLine;\n      }\n    }\n    if (line) {\n      ensureSpace(1, size);\n      page.drawText(line, { x: indent, y: cursorY, size, font, color });\n      cursorY -= (size + 4);\n    }\n  }\n\n  // --- PDF Header ---\n  \n  // Titel\n  page.drawText(`${agentName} Report`, { x: 40, y: cursorY, size: 18, font: fontBold });\n  cursorY -= 30;\n\n  // Metadaten\n  drawTextLine(`URL: ${url}`);\n  drawTextLine(`Zeitstempel: ${timestamp}`);\n  \n  // Stats Zeile (Rot wenn Fehler)\n  const statsColor = stats.total_issues > 0 ? rgb(0.8, 0, 0) : rgb(0, 0.5, 0);\n  drawTextLine(`Gesamte Fehler: ${stats.total_issues} (Kritisch: ${stats.critical})`, { \n      font: fontBold, \n      color: statsColor \n  });\n  cursorY -= 20;\n\n  // --- PDF Body (aus Markdown) ---\n  \n  const lines = md.split(/\\r?\\n/);\n\n  for (const rawLine of lines) {\n    let line = rawLine.trimEnd();\n    if (!line.trim()) {\n        cursorY -= 6;\n        continue;\n    }\n\n    // Überschriften (###)\n    const headingMatch = line.match(/^(#{1,6})\\s+(.*)$/);\n    if (headingMatch) {\n        const text = cleanInline(headingMatch[2]);\n        ensureSpace(2, 12);\n        \n        // Farbe für \"CRITICAL\" im Titel\n        let color = rgb(0, 0, 0);\n        if (text.includes('CRITICAL') || text.includes('🔴')) color = rgb(0.8, 0, 0);\n        \n        drawTextLine(text, { font: fontBold, size: 12, color });\n        cursorY -= 4;\n        continue;\n    }\n\n    // Listenpunkte\n    const listMatch = line.match(/^\\s*[-*]\\s+(.*)$/);\n    if (listMatch) {\n        const text = cleanInline(listMatch[1]);\n        drawTextLine('• ' + text, { indent: 55, size: 10 });\n        continue;\n    }\n\n    // Normaler Text\n    drawTextLine(cleanInline(line));\n  }\n\n  // PDF speichern\n  const pdfBytes = await pdfDoc.save();\n  const pdfBase64 = Buffer.from(pdfBytes).toString('base64');\n\n  return [\n    {\n      json: data,\n      binary: {\n        report: {\n          data: pdfBase64,\n          mimeType: 'application/pdf',\n          fileName: 'gaa-agent-report.pdf',\n        },\n        ...(binary.screenshot ? { screenshot: binary.screenshot } : {}),\n      },\n    },\n  ];\n}\n\nreturn run();"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1872,
+        224
+      ],
+      "id": "d8c1de13-cee7-4464-94ee-d0cdc05d2159",
+      "name": "Build PDF"
+    },
+    {
+      "parameters": {
+        "jsCode": "const inputItem = $input.first().json;\n\n// Daten holen (Fallback auf leere Objekte)\nconst axeInput = inputItem['axe-data'] || {};\nconst pa11yInput = inputItem['pa11y-data'] || {};\n\nconst url = axeInput.url || pa11yInput.url || 'unbekannte URL';\n\nconst axeViolations = axeInput.result?.violations || [];\n\nconst groupedIssues = {};\n\nfunction addIssue(tool, id, description, impact, selector) {\n  const key = `${tool}::${id}`;\n  \n  if (!groupedIssues[key]) {\n    groupedIssues[key] = {\n      tool: tool,\n      id: id,\n      description: description,\n      impact: impact,\n      count: 0,\n      selectors: []\n    };\n  }\n  \n  groupedIssues[key].count++;\n  if (groupedIssues[key].selectors.length < 5) {\n    groupedIssues[key].selectors.push(selector);\n  }\n}\n\naxeViolations.forEach(v => {\n\n  v.nodes.forEach(node => {\n    const selector = node.target && node.target.length > 0 ? node.target.join(' ') : 'unknown';\n    addIssue('axe-core', v.id, v.help || v.description, v.impact, selector);\n  });\n});\n\nconst pa11yIssues = pa11yInput.issues || [];\n\npa11yIssues.forEach(issue => {\n\n  let impact = 'minor';\n  if (issue.type === 'error') impact = 'critical';\n  if (issue.type === 'warning') impact = 'moderate';\n  \n  addIssue('pa11y', issue.code, issue.message, impact, issue.selector);\n});\n\nconst resultsArray = Object.values(groupedIssues);\n\n// Sortier-Reihenfolge definieren\nconst impactOrder = { 'critical': 0, 'serious': 1, 'moderate': 2, 'minor': 3, 'info': 4 };\n\nresultsArray.sort((a, b) => {\n  // Erst nach Schweregrad\n  const orderA = impactOrder[a.impact] ?? 99;\n  const orderB = impactOrder[b.impact] ?? 99;\n  if (orderA !== orderB) return orderA - orderB;\n  \n  // Dann nach Anzahl (häufigste zuerst)\n  return b.count - a.count;\n});\n\n// --- 4. Output für den Report ---\nreturn {\n  url: url,\n  timestamp: new Date().toISOString(),\n  agentName: \"GAA_v1\",\n  // Wir geben jetzt die gruppierte Liste weiter, das spart massiv Platz\n  aggregatedResults: resultsArray,\n  stats: {\n    total_issues: resultsArray.reduce((sum, item) => sum + item.count, 0),\n    critical: resultsArray.filter(i => i.impact === 'critical').length,\n    serious: resultsArray.filter(i => i.impact === 'serious').length\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1440,
+        224
+      ],
+      "id": "6682391e-1bbb-4ef7-91ce-703a09ad2f4e",
+      "name": "Daten Aggregation"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "gpt-4o-mini"
+        },
+        "options": {
+          "responseFormat": "json_object"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        1968,
+        656
+      ],
+      "id": "46abd2f2-d817-48dd-8a2f-dbfbabe369c4",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "YOUR_RAG_AGENT_WORKFLOW_ID",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/YOUR_RAG_AGENT_WORKFLOW_ID",
+          "cachedResultName": "RAG-Agent"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "url": "={{ $json.url }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "url",
+              "displayName": "url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "sessionID",
+              "displayName": "sessionID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        2112,
+        720
+      ],
+      "id": "8197e07d-9e25-4f59-80d2-279e07ab9d89",
+      "name": "Call 'RAG-Agent'"
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "toolCallId",
+        "contextWindowLength": 10
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        2064,
+        816
+      ],
+      "id": "ed52c5de-304c-4798-85fc-14b00dadbfe5",
+      "name": "Simple Memory"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=ROLLE:\nDu bist der \"GAA-Analyst\" im A11y-Orchestra. Deine Aufgabe ist es, die technischen Rohdaten (von axe-core und Pa11y) zu analysieren, zu priorisieren und mit Handlungsempfehlungen anzureichern.\n\nEINGABE (ROHDATEN):\nHier ist die Liste der aggregierten Fehler, die du analysieren sollst:\n\n```json\n{{ JSON.stringify($json.aggregatedResults) }}\n\nPRIORISIERUNGS-LOGIK:\n1.  **PRIO 1 (Fokus):** Analysiere ZUERST alle Fehler, die das Kriterium **WCAG 2.5.8 (Target Size)** betreffen. Das ist dein Spezialgebiet.\n2.  **PRIO 2 (Kritische Sicherheit):** Analysiere DANACH alle anderen Fehler mit dem Impact \"critical\" oder \"serious\". Ignoriere \"minor\" oder \"moderate\", um den Bericht fokussiert zu halten.\n\nAUFGABE:\n1.  Gehe die Liste durch und filtere nach der oben genannten Logik.\n2.  Für jeden relevanten Fehlertyp (Cluster):\n    * Nutze dein RAG-Tool, um eine präzise technische Lösung zu finden (z.B. \"Wie behebe ich Target Size Fehler?\" oder \"Was tun bei fehlendem Kontrast?\").\n    * Nutze die \"helpUrl\" aus den Axe-Daten als zusätzlichen Kontext, falls vorhanden.\n3.  Erstelle das finale JSON-Objekt nach dem \"A11y-Orchestra Standard\".\n\nSTANDARD OUTPUT SCHEMA (JSON):\n{\n  \"agent_name\": \"GAA\",\n  \"wcag_criterion\": \"2.5.8 & Criticals\",\n  \"status\": \"fail\", // oder \"pass\"\n  \"executive_summary\": \"Zusammenfassung in 1-2 Sätzen. Erwähne zuerst den Status zu 2.5.8, dann allgemein die kritische Lage.\",\n  \"detailed_results\": [\n    {\n      \"issue_id\": \"target-size-minimum\",\n      \"description\": \"Button ist kleiner als 24x24px\",\n      \"severity\": \"critical\",\n      \"tool\": \"axe-core\",\n      \"count\": 12,\n      \"recommendation\": \"Padding auf min. 44px erhöhen (laut RAG).\"\n    },\n    {\n      \"issue_id\": \"color-contrast\",\n      \"description\": \"Kontrastverhältnis unter 4.5:1\",\n      \"severity\": \"critical\",\n      \"tool\": \"pa11y\",\n      \"count\": 5,\n      \"recommendation\": \"Hintergrundfarbe abdunkeln.\"\n    }\n  ],\n}\n\nWICHTIG:\nGib NUR dieses JSON zurück - kein Markdown, kein Konversationstext. ",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        1968,
+        496
+      ],
+      "id": "2f438834-2147-4af4-9e91-8320c007650f",
+      "name": "GAA-Analyst"
+    },
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "url"
+            },
+            {
+              "name": "toolCallId"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        96,
+        240
+      ],
+      "id": "aa4b8164-182a-4b52-8b8e-e234b584ab8b",
+      "name": "Manager-Agent"
+    },
+    {
+      "parameters": {
+        "mode": "chooseBranch",
+        "useDataOfInput": 2
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        2512,
+        368
+      ],
+      "id": "37c96169-0a99-44fc-9158-2c89f2bd6497",
+      "name": "Agent ausgeben"
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $input.first();\n\n// Falls der Agent einen String-Fehler zurückgibt\nif (typeof raw === 'string') {\n  return [{ json: { error: raw, agent: 'GAA', status: 'error' } }];\n}\n\n// Falls es ein Item ist, aber kein json-Feld hat\nif (!raw.json) {\n  return [{ json: { error: 'Agent returned no data', agent: 'GAA', status: 'error' } }];\n}\n\n// Alles OK → durchreichen\nreturn [raw];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2320,
+        496
+      ],
+      "id": "8e56b5ff-a7f5-44a1-b816-eeaab240c15f",
+      "name": "Code in JavaScript"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Pa11y": {
+      "main": [
+        [
+          {
+            "node": "Pfad extrahieren1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Daten Aggregation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "lese Pa11y-Ergebnisse": {
+      "main": [
+        [
+          {
+            "node": "extract pa11y",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "lese axe-Ergebnisse": {
+      "main": [
+        [
+          {
+            "node": "extract axe",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pfad extrahieren1": {
+      "main": [
+        [
+          {
+            "node": "lese Pa11y-Ergebnisse",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "extract axe": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "extract pa11y": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pfad extrahieren2": {
+      "main": [
+        [
+          {
+            "node": "lese axe-Ergebnisse",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload file": {
+      "main": [
+        [
+          {
+            "node": "Agent ausgeben",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "axe": {
+      "main": [
+        [
+          {
+            "node": "Pfad extrahieren2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Report": {
+      "main": [
+        [
+          {
+            "node": "Build PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build PDF": {
+      "main": [
+        [
+          {
+            "node": "Upload file",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Daten Aggregation": {
+      "main": [
+        [
+          {
+            "node": "Build Report",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "GAA-Analyst",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "GAA-Analyst",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call 'RAG-Agent'": {
+      "ai_tool": [
+        [
+          {
+            "node": "GAA-Analyst",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "GAA-Analyst",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manager-Agent": {
+      "main": [
+        [
+          {
+            "node": "Pa11y",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "axe",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GAA-Analyst": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Agent ausgeben",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "047a96a5-d3ea-4f7e-abb4-9575822e8a71",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "YOUR_INSTANCE_ID"
+  },
+  "id": "YOUR_WORKFLOW_ID",
+  "tags": []
+}

@@ -1,0 +1,281 @@
+{
+  "name": "VFA",
+  "nodes": [
+    {
+      "parameters": {
+        "command": "=bash -lc \"node /usr/local/bin/playwright-runner.js '{{ $json.url }}' '{\\\"viewports\\\":[{\\\"width\\\":1280,\\\"height\\\":800}]}'\""
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        -1504,
+        576
+      ],
+      "id": "ae7604ba-485d-4354-8ed0-c00a40675992",
+      "name": "Execute Command"
+    },
+    {
+      "parameters": {
+        "jsCode": "// VFA: Parse Results from Playwright stdout\n\n// 1) stdout aus Execute Command holen\nif (!items[0] || !items[0].json || typeof items[0].json.stdout !== 'string') {\n  throw new Error('Parse Results: stdout missing or not a string');\n}\n\nconst stdout = items[0].json.stdout;\n\n// 2) stdout als JSON parsen (oder null, wenn komplett kaputt)\nlet output = null;\ntry {\n  output = JSON.parse(stdout);\n} catch (e) {\n  output = null;\n}\n\n// 3) ursprüngliche URL aus Trigger holen\nlet originalInput = {};\ntry {\n  originalInput = $items('When Executed by Another Workflow', 0, 0).json || {};\n} catch (e) {\n  originalInput = {};\n}\n\nconst fallbackUrl =\n  (output && (output.url || output.pageUrl)) ||\n  originalInput.url ||\n  originalInput.pageUrl ||\n  'unbekannte URL';\n\n// 4) Fallback, wenn Playwright-Output keine results enthält\nif (\n  !output ||\n  !output.results ||\n  !Array.isArray(output.results) ||\n  output.results.length === 0\n) {\n  // Kein verwertbares Ergebnis → trotzdem ein Item zurückgeben,\n  // damit der Workflow weiterläuft und der Report sagen kann,\n  // dass VFA hier nichts Sinnvolles liefern konnte.\n  return [\n    {\n      json: {\n        url: fallbackUrl,\n        selector: null,\n        role: null,\n        width: null,\n        height: null,\n        viewport: '',\n        wcag: '2.4.11 Focus Not Obscured (Minimum)',\n        issue:\n          'Playwright-VFA konnte keine auswertbaren Ergebnisse liefern (kein results-Array im Output).',\n        stdout_truncated: typeof stdout === 'string' ? stdout.slice(0, 2000) : '',\n        precheck_no_targets: true,\n        parse_error:\n          !output ? 'stdout_not_valid_json_or_unexpected_shape' : 'no_results_array',\n      },\n    },\n  ];\n}\n\n// 5) Normalfall: wir haben results\nconst run = output.results[0];\nconst screenshotBase64 = run.screenshot || null;\n\nconst runUrl =\n  output.url ||\n  run.url ||\n  fallbackUrl;\n\nconst viewportText = run.viewport\n  ? `${run.viewport.width}x${run.viewport.height}`\n  : '';\n\nconst failedTargets = [];\n\n// Targets durchsuchen und nur die problematischen zurückgeben\nif (Array.isArray(run.targets)) {\n  for (const target of run.targets) {\n    if (!target.pass) {\n      failedTargets.push({\n        url: runUrl,\n        selector: target.selector || '',\n        role: target.role || '',\n        width: target.width ?? null,\n        height: target.height ?? null,\n        viewport: viewportText,\n        wcag: '2.4.11 Focus Not Obscured (Minimum)',\n        issue: 'Element might be obscured when focused',\n        screenshot: screenshotBase64,\n      });\n    }\n  }\n}\n\n// 6) Wenn keine verdächtigen Targets → trotzdem ein Item zurückgeben\nif (failedTargets.length === 0) {\n  return [\n    {\n      json: {\n        url: runUrl,\n        selector: null,\n        role: null,\n        width: null,\n        height: null,\n        viewport: viewportText,\n        wcag: '2.4.11 Focus Not Obscured (Minimum)',\n        issue: 'Pre-Check hat keine potenziell verdeckten Fokusziele gefunden.',\n        screenshot: screenshotBase64,\n        precheck_no_targets: true,\n      },\n    },\n  ];\n}\n\n// 7) Sonst: pro failed Target ein Item\nreturn failedTargets.map(t => ({ json: t }));\n"
+      },
+      "id": "59aef41d-78f1-479e-8393-311a8461bddb",
+      "name": "Parse Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1296,
+        576
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const basePrompt = `\nRolle:\nDu bist ein Accessibility-Experte und bewertest das WCAG-2.4.11-Kriterium\n\"Focus Not Obscured (Minimum)\" für ein einzelnes Fokusziel.\n\nKontext:\n- URL: ${$json.url || 'unbekannte URL'}\n- CSS-Selector: ${$json.selector || 'unbekannt'}\n- ARIA-Rolle: ${$json.role || 'unbekannt'}\n- Viewport: ${$json.viewport || 'unbekannt'}\n- Detektierter Befund (Vorprüfung): ${$json.issue || 'keine Angabe'}\n\nAufgabe:\n1. Prüfe, ob das fokussierte Element im (ggf. bereitgestellten) Screenshot vollständig sichtbar ist\n   oder teilweise / vollständig von anderen Inhalten verdeckt wird.\n2. Beschreibe in knapper Form die Ursache, falls es verdeckt wird (z. B. Sticky-Header, Overlay, Modal).\n3. Triff eine klare Bewertung, ob WCAG 2.4.11 erfüllt ist oder nicht.\n\nWenn kein brauchbarer Screenshot vorliegt oder das Element nicht zuverlässig erkannt werden kann:\n- Setze \"is_violation\" auf null.\n- Schreibe eine kurze, sachliche Begründung im Feld \"summary\", z. B.\n  \"Das fokussierte Element konnte im Screenshot nicht sicher identifiziert werden; Bewertung ist unklar.\"\n- Gib KEINE allgemeinen Testanleitungen und keine langen Schritt-für-Schritt-Anweisungen zurück.\n\nWICHTIG:\n- Antworte ausschließlich auf DEUTSCH.\n- Gib ausschließlich gültiges JSON ohne erklärenden Fließtext zurück.\n- Verwende genau dieses Format:\n\n{\n  \"url\": \"<erkannte URL oder leer>\",\n  \"is_violation\": true | false | null,\n  \"severity\": \"low\" | \"medium\" | \"high\" | null,\n  \"summary\": \"<kurze Zusammenfassung auf Deutsch>\",\n  \"reasons\": [\"<kurze Begründung 1>\", \"<Begründung 2>\"],\n  \"evidence\": [\"<Hinweise auf konkrete Stellen, z. B. Sticky-Header verdeckt Fokus>\"]\n}\n`.trim();\n\n// Screenshot aus Parse Results\nconst screenshot = $json.screenshot;\n\n// Content-Array für die OpenAI-Anfrage\nconst content = [\n  {\n    type: 'text',\n    text: basePrompt,\n  },\n];\n\n// Screenshot nur anhängen, wenn er tatsächlich wie Base64 aussieht\nif (typeof screenshot === 'string') {\n  const trimmed = screenshot.trim();\n\n  let dataUrl = null;\n\n  // Fall 1: bereits data:-URL\n  if (trimmed.startsWith('data:image')) {\n    dataUrl = trimmed;\n  } else {\n    // Fall 2: reiner Base64-Blob\n    const base64Candidate = trimmed.replace(/\\s+/g, '');\n    const looksLikeBase64 =\n      /^[A-Za-z0-9+/=]+$/.test(base64Candidate) && base64Candidate.length > 100;\n\n    if (looksLikeBase64) {\n      dataUrl = `data:image/png;base64,${base64Candidate}`;\n    }\n  }\n\n  if (dataUrl) {\n    content.push({\n      type: 'image_url',\n      image_url: {\n        url: dataUrl,\n        detail: 'auto',\n      },\n    });\n  }\n}\n\n// Request-Body für HTTP Request Node\nreturn {\n  json: {\n    body: {\n      model: 'gpt-4o',\n      max_tokens: 400,\n      messages: [\n        {\n          role: 'user',\n          content,\n        },\n      ],\n    },\n  },\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1072,
+        576
+      ],
+      "id": "5f4a66cb-b9f7-4098-bddc-6521ccbd7231",
+      "name": "Prepare"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer YOUR_OPENAI_API_KEY"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.body }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        -848,
+        576
+      ],
+      "id": "5a620a1c-a186-4a7a-90bb-56ee9baee3f5",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "url"
+            },
+            {
+              "name": "toolCallId"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -1712,
+        576
+      ],
+      "id": "78159c32-fa41-4fcb-9dff-0b109feef057",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "inputDataFieldName": "report",
+        "name": "={{ 'vfa-' + new Date().toISOString().slice(0,10) + '.pdf' }}",
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "YOUR_GDRIVE_FOLDER_ID",
+          "mode": "list",
+          "cachedResultName": "vfa-reports",
+          "cachedResultUrl": "https://drive.google.com/drive/folders/YOUR_GDRIVE_FOLDER_ID"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        -128,
+        576
+      ],
+      "id": "66a68189-9a6c-4384-b9a6-0b11bda2a024",
+      "name": "Upload file",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "# VF-Agent",
+        "height": 416,
+        "width": 2288
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -1872,
+        432
+      ],
+      "typeVersion": 1,
+      "id": "ac3ede1c-eb69-4b55-bb3e-57f9ea6abf9b",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "jsCode": "// VFA: Build Report (Aggregation aller geprüften Elemente)\n\nconst items = $input.all(); // Alle Ergebnisse vom LLM (HTTP Request)\nconst firstItem = items[0] || {};\n\n// Metadaten aus dem ersten Item holen (URL ist bei allen gleich)\n// Wir versuchen, die URL aus dem AI-Response oder dem Kontext zu retten\nlet url = 'unbekannte URL';\n\n// Ergebnisse sammeln\nconst detailedResults = [];\nlet violationCount = 0;\nlet preCheckNoTargets = false;\n\n// Durch alle Items (geprüfte Elemente) iterieren\nfor (const item of items) {\n    const raw = item.json || {};\n    \n    // 1. Content vom LLM parsen\n    let content = raw;\n    if (raw.choices && raw.choices[0]?.message?.content) {\n        content = raw.choices[0].message.content.trim();\n    }\n    \n    let analysis = {};\n    if (typeof content === 'string') {\n        const cleanContent = content.replace(/```json/g, '').replace(/```/g, '').trim();\n        try {\n            analysis = JSON.parse(cleanContent);\n        } catch (e) {\n            analysis = { summary: \"Fehler beim Parsen der KI-Antwort\", is_violation: null };\n        }\n    } else {\n        analysis = content;\n    }\n\n    // URL retten (falls vorhanden)\n    if (!url || url === 'unbekannte URL') {\n        if (analysis.url) url = analysis.url;\n    }\n    \n    // 2. Prüfen: War das ein \"Keine Targets\" Durchlauf?\n    // (Das müssten wir idealerweise aus dem vorherigen Node durchschleifen, \n    // aber oft erkennt man es am leeren Analysis-Ergebnis oder spezifischen Text)\n    if (analysis.summary && analysis.summary.includes('keine potenziell verdeckten Fokusziele')) {\n        preCheckNoTargets = true;\n        continue; \n    }\n\n    // 3. Violation prüfen\n    if (analysis.is_violation === true) {\n        violationCount++;\n        detailedResults.push({\n            issue_id: \"2.4.11-focus-not-obscured\",\n            // Da wir den Selektor hier evtl. verloren haben (wenn er nicht im LLM Output ist),\n            // nutzen wir die Beschreibung als Identifier\n            description: analysis.summary || \"Fokus-Indikator ist verdeckt.\",\n            severity: analysis.severity || \"serious\",\n            tool: \"gpt-4o-vision\",\n            count: 1,\n            evidence: analysis.evidence ? analysis.evidence.join('; ') : \"Screenshot Analyse\",\n            recommendation: \"Ensure element is fully visible when focused (e.g. adjust scroll padding).\"\n        });\n    }\n}\n\n// Gesamtstatus bestimmen\nlet status = 'pass';\nlet executiveSummary = '';\n\nif (preCheckNoTargets && violationCount === 0) {\n    status = 'pass';\n    executiveSummary = \"Der Vorab-Check (Playwright) hat keine potenziell verdeckten Elemente gefunden. Visuelle Prüfung unauffällig.\";\n} else if (violationCount > 0) {\n    status = 'fail';\n    executiveSummary = `Die visuelle KI-Analyse hat ${violationCount} Elemente identifiziert, bei denen der Fokus-Indikator verdeckt oder nicht sichtbar ist (WCAG 2.4.11).`;\n} else {\n    status = 'pass';\n    executiveSummary = \"Alle geprüften Fokus-Ziele waren visuell frei zugänglich. Keine Verstöße gegen WCAG 2.4.11 erkannt.\";\n}\n\nconst reportMarkdown = `## VFA Report (WCAG 2.4.11)\\nStatus: ${status}\\n\\n${executiveSummary}\\n\\nGefundene Verstöße: ${violationCount}`;\n\nreturn [\n  {\n    json: {\n      agent_name: \"VFA\",\n      wcag_criterion: \"2.4.11\",\n      status: status,\n      executive_summary: executiveSummary,\n      detailed_results: detailedResults,\n      url: url,\n      reportMarkdown: reportMarkdown,\n    },\n    binary: firstItem.binary \n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -608,
+        576
+      ],
+      "id": "01bccb28-a3b7-4b08-aa52-77d01d9e04c4",
+      "name": "Build Report"
+    },
+    {
+      "parameters": {
+        "jsCode": "const { PDFDocument, StandardFonts, rgb } = require('pdf-lib');\n\nfunction sanitize(text) {\n  if (!text) return '';\n  let t = String(text);\n  t = t.replace(/\\u202F/g, ' ');\n  t = t\n    .split('')\n    .map(ch => (ch.charCodeAt(0) > 255 ? ' ' : ch))\n    .join('');\n  return t;\n}\n\nasync function run() {\n  const item = items[0];\n  const data = item.json || {};\n  const binary = item.binary || {};\n\n  const url = sanitize(data.url || 'unbekannte URL');\n  const wcagArr = Array.isArray(data.wcag) ? data.wcag : (data.wcag ? [data.wcag] : []);\n  const wcagText = wcagArr.length ? wcagArr.join(', ') : '2.4.11';\n  const resultRaw = (data.result || 'unknown').toLowerCase();\n  const summary = sanitize(data.summary || '');\n  const md = sanitize(data.reportMarkdown || '');\n\n  const pdfDoc = await PDFDocument.create();\n  let page = pdfDoc.addPage();\n  const { width, height } = page.getSize();\n\n  const fontRegular = await pdfDoc.embedFont(StandardFonts.Helvetica);\n  const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);\n\n  let cursorY = height - 40;\n\n  function colorForResult() {\n    switch (resultRaw) {\n      case 'fail':\n      case 'error':\n        return rgb(0.8, 0, 0);\n      case 'warning':\n      case 'partial':\n        return rgb(0.9, 0.5, 0);\n      case 'pass':\n        return rgb(0, 0.5, 0);\n      default:\n        return rgb(0, 0, 0);\n    }\n  }\n\n  function wrapText(page, text, x, y, opts = {}) {\n    const font = opts.font || fontRegular;\n    const size = opts.size || 11;\n    const color = opts.color || rgb(0, 0, 0);\n    const maxWidth = opts.maxWidth || (width - 80);\n    const lineHeight = opts.lineHeight || (size + 3);\n\n    const words = text.split(/\\s+/);\n    let line = '';\n\n    for (const w of words) {\n      const testLine = line ? line + ' ' + w : w;\n      const lineWidth = font.widthOfTextAtSize(testLine, size);\n      if (lineWidth > maxWidth) {\n        page.drawText(line, { x, y, size, font, color });\n        y -= lineHeight;\n        line = w;\n      } else {\n        line = testLine;\n      }\n    }\n\n    if (line) {\n      page.drawText(line, { x, y, size, font, color });\n      y -= lineHeight;\n    }\n\n    return y;\n  }\n\n  function ensureSpace(linesNeeded, baseSize = 11) {\n    const minY = 40;\n    const estimated = baseSize + 4;\n    if (cursorY - linesNeeded * estimated < minY) {\n      page = pdfDoc.addPage();\n      cursorY = height - 40;\n    }\n  }\n\n  // Titelzeile\n  ensureSpace(2, 16);\n  page.drawText('VFA-Agent Bericht   Fokus nicht verdeckt (WCAG 2.4.11)', {\n    x: 40,\n    y: cursorY,\n    size: 16,\n    font: fontBold,\n    color: rgb(0, 0, 0),\n  });\n  cursorY -= 24;\n\n  // Meta: URL, WCAG, Ergebnis\n  ensureSpace(3, 11);\n  cursorY = wrapText(page, `URL: ${url}`, 40, cursorY, { font: fontRegular, size: 11 });\n  cursorY = wrapText(page, `WCAG: ${wcagText}`, 40, cursorY, { font: fontRegular, size: 11 });\n  cursorY = wrapText(\n    page,\n    `Ergebnis: ${resultRaw.toUpperCase()}`,\n    40,\n    cursorY,\n    { font: fontBold, size: 11, color: colorForResult() }\n  );\n  cursorY -= 10;\n\n  // Zusammenfassung\n  if (summary) {\n    ensureSpace(3, 12);\n    page.drawText('Kurzfassung', {\n      x: 40,\n      y: cursorY,\n      size: 13,\n      font: fontBold,\n      color: rgb(0, 0, 0),\n    });\n    cursorY -= 18;\n    cursorY = wrapText(page, summary, 40, cursorY, { font: fontRegular, size: 11 });\n    cursorY -= 10;\n  }\n\n  // Markdown-Body\n  if (md) {\n    ensureSpace(2, 12);\n    page.drawText('Detailanalyse', {\n      x: 40,\n      y: cursorY,\n      size: 13,\n      font: fontBold,\n      color: rgb(0, 0, 0),\n    });\n    cursorY -= 18;\n\n    const lines = md.split(/\\r?\\n/);\n    for (let rawLine of lines) {\n      const line = rawLine.trimEnd();\n\n      if (!line.trim()) {\n        cursorY -= 6;\n        continue;\n      }\n\n      // Überschriften: #, ##, ###\n      const headingMatch = line.match(/^(#{1,6})\\s+(.*)$/);\n      if (headingMatch) {\n        const level = headingMatch[1].length;\n        const text = headingMatch[2];\n        const size = level === 1 ? 14 : level === 2 ? 13 : 12;\n        ensureSpace(2, size);\n        cursorY = wrapText(page, text, 40, cursorY, {\n          font: fontBold,\n          size,\n        });\n        cursorY -= 4;\n        continue;\n      }\n\n      // Bullet-Listen: - oder *\n      const bulletMatch = line.match(/^\\s*[-*]\\s+(.*)$/);\n      if (bulletMatch) {\n        const text = '• ' + bulletMatch[1];\n        ensureSpace(1, 11);\n        cursorY = wrapText(page, text, 50, cursorY, {\n          font: fontRegular,\n          size: 11,\n        });\n        continue;\n      }\n\n      // normaler Absatz\n      ensureSpace(2, 11);\n      cursorY = wrapText(page, line, 40, cursorY, {\n        font: fontRegular,\n        size: 11,\n      });\n    }\n  }\n\n  const pdfBytes = await pdfDoc.save();\n  const pdfBase64 = Buffer.from(pdfBytes).toString('base64');\n\n  return [\n    {\n      json: data,\n      binary: {\n        report: {\n          data: pdfBase64,\n          mimeType: 'application/pdf',\n          fileName: 'vfa-agent-report.pdf',\n        },\n        ...(binary.screenshot ? { screenshot: binary.screenshot } : {}),\n      },\n    },\n  ];\n}\n\nreturn run();\n"
+    },
+    {
+      "parameters": {
+        "jsCode": "const inputItem = $input.first().json;\n\nreturn {\n  json: {\n    agent_name: inputItem.agent_name || \"VFA\",\n    wcag_criterion: inputItem.wcag_criterion,\n    status: inputItem.status,\n    executive_summary: inputItem.executive_summary,\n    detailed_results: inputItem.detailed_results,\n    // Kein PDF Link, da für Manager irrelevant\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        112,
+        576
+      ],
+      "id": "b142c124-e966-4a36-8d35-cece52503b24",
+      "name": "VFA Tool Result"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Execute Command": {
+      "main": [
+        [
+          {
+            "node": "Parse Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Results": {
+      "main": [
+        [
+          {
+            "node": "Prepare",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Build Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Execute Command",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload file": {
+      "main": [
+        [
+          {
+            "node": "VFA Tool Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Report": {
+      "main": [
+        [
+          {
+            "node": "Build PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build PDF": {
+      "main": [
+        [
+          {
+            "node": "Upload file",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "callerPolicy": "workflowsFromSameOwner",
+    "executionTimeout": 3600,
+    "availableInMCP": false,
+    "timeSavedPerExecution": 5
+  },
+  "versionId": "1994e557-fcda-4e1e-9b47-279d4f465935",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "YOUR_INSTANCE_ID"
+  },
+  "id": "YOUR_WORKFLOW_ID",
+  "tags": []
+}

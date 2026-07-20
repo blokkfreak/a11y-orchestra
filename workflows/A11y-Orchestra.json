@@ -1,0 +1,648 @@
+{
+  "name": "A11y-Orchestra",
+  "nodes": [
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "gpt-4o-mini"
+        },
+        "options": {
+          "temperature": 0.1
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        1648,
+        5392
+      ],
+      "id": "4719ca01-1285-4b9f-b88f-7f710f4b21f0",
+      "name": "OpenAI Chat Model2",
+      "credentials": {
+        "openAiApi": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "# Manager\n\n",
+        "height": 468,
+        "width": 1868,
+        "color": 2
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        1552,
+        4752
+      ],
+      "typeVersion": 1,
+      "id": "6716a30d-b4c8-43a6-935e-025d0872772a",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "## RAG-Agent",
+        "height": 236,
+        "width": 284,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2224,
+        5312
+      ],
+      "id": "b3b743a6-4174-4d81-a209-78dd9e3576cb",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "options": {
+          "responseMode": "lastNode"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        1712,
+        4896
+      ],
+      "id": "6ff2b9a0-fafa-43e3-81e8-57a967c23379",
+      "name": "Chat",
+      "webhookId": "YOUR_WEBHOOK_ID"
+    },
+    {
+      "parameters": {
+        "jsCode": "const sensitivePatterns = {\n  tracking: ['fbclid', 'gclid', 'utm_', 'mc_', '_ga', 'msclkid'],\n  cookies: ['phpsessid', 'jsessionid', 'sessionid'],\n  pii: ['email', 'phone', 'userid', 'customer_id', 'token'],\n  analytics: ['_hsenc', '_hsmi', 'mkwid', 'pcrid']\n};\n\nconst chatInput = $input.first().json.chatInput || '';\nconst sessionId = $input.first().json.sessionId || '';\nlet url = chatInput.trim();\nif (!/^https?:\\/\\//i.test(url)) {\n  url = 'https://' + url;\n}\nlet isValidUrl = false;\nlet hasSensitiveData = false;\nlet foundSensitive = [];\nlet params = [];\n\ntry {\n  if (url.match(/^https?:\\/\\/[^\\s]+$/i)) {\n    isValidUrl = true;\n    const queryString = url.split('?')[1] || '';\n    if (queryString) {\n      params = queryString.split('&').map(pair => pair.split('=')[0].toLowerCase());\n      for (const [category, patterns] of Object.entries(sensitivePatterns)) {\n        const matches = params.filter(p =>\n          patterns.some(pattern => p.includes(pattern))\n        );\n        if (matches.length > 0) {\n          foundSensitive.push({ category, matches });\n        }\n      }\n      hasSensitiveData = foundSensitive.length > 0;\n    }\n  }\n} catch (error) {\n  isValidUrl = false;\n}\nreturn {\n  url: url,\n  isValidUrl: isValidUrl,\n  hasSensitiveData: hasSensitiveData,\n  sensitiveFindings: foundSensitive,\n  chatInput: chatInput,\n  sessionId: sessionId\n};\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1888,
+        4896
+      ],
+      "id": "80590eb7-607f-43de-8e7d-458d563ddcdf",
+      "name": "URL checken"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.isValidUrl }}",
+              "value2": "={{ $json.isValidUrl }}"
+            },
+            {
+              "value1": "={{ $json.hasSensitiveData }}",
+              "value2": "={{ $json.hasSensitiveData }}"
+            }
+          ]
+        }
+      },
+      "id": "ba1c5e1b-22f7-45c6-aaef-092254968ffe",
+      "name": "passt URL?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        2064,
+        4896
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ \n$json.hasSensitiveData\n  ? (\n    \"URL ist schlecht, weil \" + \n    $json.sensitiveFindings.map(f => `${f.category}: ${f.matches.join(', ')}`).join('; ') + \n    \". Überarbeite die url.\"\n    )\n  : \"URL ist okay.\"\n}}\n",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "text/plain; charset=utf-8"
+              }
+            ]
+          }
+        }
+      },
+      "id": "a7b4331b-1cf4-4fda-b8f1-6b1dc0ae502b",
+      "name": "Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        2256,
+        4960
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=ROLLE:\nDu bist der Manager von A11y-Orchestra.\nDeine Aufgabe: Koordination der Audit-Tools und Erstellung des Berichts.\n\nAKTUELLER KONTEXT (WICHTIG):\nDie zu prüfende URL lautet: {{ $json.url }}\nDu MUSST diese URL exakt so an die Tools weitergeben.\n\nTOOLS (WORKER):\n1. **VFA (Visual Flow Agent):** Prüft WCAG 2.4.11 (Fokus).\n2. **CSA (Cognitive Security Agent):** Prüft WCAG 3.3.8 (Authentifizierung).\n3. **RAG:** Liefert Normenwissen bei Fehlern.\n\nABLAUF:\n\nSCHRITT 1: DATENERHEBUNG\nRufe **VFA** und **CSA** auf.\nÜbergib dabei zwingend den Parameter `url` mit dem Wert \"{{ $json.url }}\".\nWarte auf die JSON-Antworten.\n\nSCHRITT 2: RAG-CHECK\nAnalysiere die Ergebnisse. Falls ein Tool \"fail\" oder \"warning\" meldet:\nNutze das **RAG** Tool. Frage nach einer Lösung für den spezifischen Fehler und nutze das Wissen für den Bericht.\n\nSCHRITT 3: BERICHT\nErstelle den Abschlussbericht strikt im Markdown-Format.\n\nOUTPUT-FORMAT (MARKDOWN):\nAntworte NUR mit diesem Gerüst:\n\n# WCAG 2.2 Audit: {{ $json.url }}\n\n## 1. Executive Summary\n* Fasse die Ergebnisse von VFA und CSA zusammen.\n* Gesamturteil: [Bestanden/Nicht bestanden]\n\n## 2. Detaillierte Ergebnisse\n\n### Visual Flow Agent (Status: [Status])\n* **Problem:** [Beschreibung aus JSON] (Severity: [Wert])\n* **Lösung:** [RAG-angereicherte Empfehlung]\n\n### Cognitive Security Agent (Status: [Status])\n* **Problem:** [Beschreibung aus JSON] (Severity: [Wert])\n* **Lösung:** [RAG-angereicherte Empfehlung]\n\n## 3. Handlungsempfehlungen\n* [Die 3 wichtigsten Maßnahmen]",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        2624,
+        4896
+      ],
+      "id": "c08eb7cc-bcf5-4f5c-b2b5-8cee8bc38bf5",
+      "name": "Manager"
+    },
+    {
+      "parameters": {
+        "description": "Nutze dieses Tool, um vertiefte Erklärungen und Normbezüge zu WCAG 2.2 zu erhalten. Der Workflow erhält das zu prüfende Kriterium sowie Kontextinformationen aus den anderen Tools (z. B. Beschreibung des UI oder konkrete Findings) und ruft einen Vektorspeicher mit aufbereiteten WCAG- und Best-Practice-Inhalten ab. Er gibt eine kompakte, begründete Antwort mit relevanten Passagen zurück, die zur Erläuterung und Begründung deiner Accessibility-Bewertung verwendet werden kann.",
+        "workflowId": {
+          "__rl": true,
+          "value": "YOUR_RAG_AGENT_WORKFLOW_ID",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/YOUR_RAG_AGENT_WORKFLOW_ID",
+          "cachedResultName": "RAG-Agent"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "sessionID": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('sessionID', ``, 'string') }}",
+            "url": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('url', ``, 'string') }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "url",
+              "displayName": "url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "sessionID",
+              "displayName": "sessionID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        2320,
+        5392
+      ],
+      "id": "e1bc41bd-0fa2-4c66-bd5e-aa7fc6b5ff34",
+      "name": "RAG"
+    },
+    {
+      "parameters": {
+        "description": "Nutze dieses Tool, um Layout und Zielgrößen nach WCAG 2.5.8 (Target Size – Minimum) zu prüfen. Das Workflow erhält URL, gewählte Variante (Open-Source oder kommerziell) sowie Referenzen auf die axe- und pa11y-Ergebnisse und analysiert, ob interaktive Ziele groß genug sind und ausreichenden Abstand haben. Es gibt ein strukturiertes Ergebnis mit Bewertung (bestanden/nicht bestanden), kritischen Elementen und Begründung zurück.",
+        "workflowId": {
+          "__rl": true,
+          "value": "YOUR_GAA_WORKFLOW_ID",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/YOUR_GAA_WORKFLOW_ID",
+          "cachedResultName": "GAA"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "url": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('url', ``, 'string') }}",
+            "toolCallId": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('toolCallId', ``, 'string') }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "url",
+              "displayName": "url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "toolCallId",
+              "displayName": "toolCallId",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        2624,
+        5392
+      ],
+      "id": "96b9739b-03d5-4198-a0db-6aa5d1c19f9b",
+      "name": "GAA"
+    },
+    {
+      "parameters": {
+        "description": "Nutze dieses Tool, um Fokus-Sichtbarkeit und Überdeckung nach WCAG 2.4.11/2.4.12 zu prüfen. Der Workflow erhält URL, Variante und die relevanten DOM-/Screenshot-Daten und analysiert, ob der Fokusindikator sichtbar, nicht verdeckt und konsistent über interaktive Elemente hinweg ist. Er gibt eine zusammengefasste Bewertung mit betroffenen Komponenten und konkreten Anpassungsempfehlungen zurück",
+        "workflowId": {
+          "__rl": true,
+          "value": "YOUR_VFA_WORKFLOW_ID",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/YOUR_VFA_WORKFLOW_ID",
+          "cachedResultName": "VFA"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "url": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('url', ``, 'string') }}",
+            "toolCallId": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('toolCallId', ``, 'string') }}"
+          },
+          "matchingColumns": [
+            "url"
+          ],
+          "schema": [
+            {
+              "id": "url",
+              "displayName": "url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            },
+            {
+              "id": "toolCallId",
+              "displayName": "toolCallId",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string",
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        3232,
+        5392
+      ],
+      "id": "f476420a-bcbc-47e5-b9bf-87c1eba5bd90",
+      "name": "VFA"
+    },
+    {
+      "parameters": {
+        "content": "## GA-Agent",
+        "height": 236,
+        "width": 284,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2528,
+        5312
+      ],
+      "id": "f32d7e40-0eeb-4618-9693-a281afd8ab1f",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "content": "## CS-Agent",
+        "height": 236,
+        "width": 284,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2832,
+        5312
+      ],
+      "id": "4ac7cc14-6bcd-45df-b79d-55a72e04894f",
+      "name": "Sticky Note3"
+    },
+    {
+      "parameters": {
+        "content": "## VF-Agent",
+        "height": 236,
+        "width": 284,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        3136,
+        5312
+      ],
+      "id": "c688bb5a-52a3-40e1-a23f-7d272c573e22",
+      "name": "Sticky Note4"
+    },
+    {
+      "parameters": {
+        "description": "Nutze dieses Tool, um Anmelde- und Verifizierungsprozesse nach WCAG 3.3.8 (Accessible Authentication – Minimum) zu analysieren. Der Workflow erhält URL, Variante und Informationen zum Login-Flow (z. B. DOM-Auszug oder Ablaufbeschreibung) und prüft, ob der Vorgang ohne kognitive Rätsel, rein visuelle Erkennung oder unnötige Gedächtnislast möglich ist, etwa mit Passwortmanager-Unterstützung oder Einmal-Links. Er gibt eine Einschätzung der Konformität, identifizierte Barrieren und konkrete Verbesserungsvorschläge zurück.",
+        "workflowId": {
+          "__rl": true,
+          "value": "YOUR_CSA_WORKFLOW_ID",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/YOUR_CSA_WORKFLOW_ID",
+          "cachedResultName": "CSA"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "url": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('url', ``, 'string') }}",
+            "toolCallId": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('toolCallId', ``, 'string') }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "url",
+              "displayName": "url",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            },
+            {
+              "id": "toolCallId",
+              "displayName": "toolCallId",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "canBeUsedToMatch": true,
+              "type": "string"
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolWorkflow",
+      "typeVersion": 2.2,
+      "position": [
+        2928,
+        5392
+      ],
+      "id": "54d58a83-cf37-4e49-b53e-5d0c399fb7af",
+      "name": "CSA"
+    },
+    {
+      "parameters": {
+        "content": "## LLM",
+        "height": 236,
+        "width": 284
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1552,
+        5312
+      ],
+      "id": "53c0b834-259a-4d66-bb43-707a0516a3ef",
+      "name": "Sticky Note5"
+    },
+    {
+      "parameters": {
+        "content": "## Memory",
+        "height": 236,
+        "width": 284
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1856,
+        432,
+        5312
+      ],
+      "id": "fcb4885d-2ebe-41ad-b77a-b41457f5f2cf",
+      "name": "Sticky Note6"
+    },
+    {
+      "parameters": {
+        "contextWindowLength": 6
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        1952,
+        5392
+      ],
+      "id": "c194a617-d31b-4e5a-8c6f-8353b6888f26",
+      "name": "Simple Memory"
+    },
+    {
+      "parameters": {
+        "inputDataFieldName": "report",
+        "name": "={{ 'manager-' + new Date().toISOString().slice(0,10) + '.pdf' }}",
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "YOUR_GDRIVE_FOLDER_ID",
+          "mode": "list",
+          "cachedResultName": "n8n-Reports",
+          "cachedResultUrl": "https://drive.google.com/drive/folders/YOUR_GDRIVE_FOLDER_ID"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        3216,
+        4896
+      ],
+      "id": "6854fef8-26ca-453a-ae7d-827fe7c239c7",
+      "name": "Upload file",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const { PDFDocument, StandardFonts, rgb } = require('pdf-lib');\n\nfunction sanitize(text) {\n  if (!text) return '';\n  let t = String(text);\n  t = t.replace(/\\u202F/g, ' ');\n  t = t\n    .split('')\n    .map(ch => (ch.charCodeAt(0) > 255 ? ' ' : ch))\n    .join('');\n  return t;\n}\n\n// einfache Inline-Markup-Bereinigung: **bold**, __bold__, `code`\nfunction cleanInline(text) {\n  if (!text) return '';\n  return text\n    .replace(/\\*\\*(.*?)\\*\\*/g, '$1')\n    .replace(/__(.*?)__/g, '$1')\n    .replace(/`([^`]+)`/g, '$1');\n}\n\n// Farbe abhängig vom Text (Ergebnis / Priorität)\nfunction colorForLine(text) {\n  const lower = text.toLowerCase();\n\n  if (lower.includes('ergebnis: nicht bestanden')) {\n    return rgb(0.8, 0, 0);\n  }\n  if (lower.includes('ergebnis: bestanden')) {\n    return rgb(0, 0.5, 0);\n  }\n  if (lower.includes('priorität: hoch')) {\n    return rgb(0.8, 0, 0);\n  }\n  if (lower.includes('priorität: mittel')) {\n    return rgb(0.9, 0.5, 0);\n  }\n  if (lower.includes('priorität: niedrig')) {\n    return rgb(0.3, 0.3, 0.3);\n  }\n\n  return rgb(0, 0, 0);\n}\n\nasync function run() {\n  const item = items[0];\n  const data = item.json || {};\n\n  const md = sanitize(data.output || '');\n\n  const pdfDoc = await PDFDocument.create();\n  let page = pdfDoc.addPage();\n  let { width, height } = page.getSize();\n\n  const fontRegular = await pdfDoc.embedFont(StandardFonts.Helvetica);\n  const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);\n\n  let cursorY = height - 40;\n\n  function wrapText(page, text, x, y, opts = {}) {\n    const font = opts.font || fontRegular;\n    const size = opts.size || 11;\n    const color = opts.color || rgb(0, 0, 0);\n    const maxWidth = opts.maxWidth || width - 80;\n    const lineHeight = opts.lineHeight || size + 3;\n\n    const words = text.split(/\\s+/);\n    let line = '';\n\n    for (const w of words) {\n      const testLine = line ? line + ' ' + w : w;\n      const lineWidth = font.widthOfTextAtSize(testLine, size);\n      if (lineWidth > maxWidth) {\n        page.drawText(line, { x, y, size, font, color });\n        y -= lineHeight;\n        line = w;\n      } else {\n        line = testLine;\n      }\n    }\n\n    if (line) {\n      page.drawText(line, { x, y, size, font, color });\n      y -= lineHeight;\n    }\n\n    return y;\n  }\n\n  function ensureSpace(linesNeeded, baseSize = 11) {\n    const minY = 40;\n    const estimated = baseSize + 4;\n    if (cursorY - linesNeeded * estimated < minY) {\n      page = pdfDoc.addPage();\n      ({ width, height } = page.getSize());\n      cursorY = height - 40;\n    }\n  }\n\n  const lines = md.split(/\\r?\\n/);\n\n  for (const rawLine of lines) {\n    let line = rawLine.trimEnd();\n\n    if (!line.trim()) {\n      cursorY -= 6;\n      continue;\n    }\n\n    // ### Überschriften\n    const headingMatch = line.match(/^(#{1,6})\\s+(.*)$/);\n    if (headingMatch) {\n      const level = headingMatch[1].length;\n      const text = cleanInline(headingMatch[2]);\n      const size = level === 1 ? 16 : level === 2 ? 14 : 13;\n      ensureSpace(2, size);\n      cursorY = wrapText(page, text, 40, cursorY, {\n        font: fontBold,\n        size,\n        color: rgb(0, 0, 0),\n      });\n      cursorY -= 4;\n      continue;\n    }\n\n    // Bullet-Listen\n    const bulletMatch = line.match(/^(\\s*)[-*]\\s+(.*)$/);\n    if (bulletMatch) {\n      const indent = bulletMatch[1].length;\n      const body = cleanInline(bulletMatch[2]);\n    \n      // Top-Level-Bullets -> als normale Zeile ohne Bindestrich\n      if (indent === 0) {\n        const display = body;\n        const color = colorForLine(display);\n    \n        ensureSpace(2, 11);\n        cursorY = wrapText(page, display, 40, cursorY, {\n          font: fontRegular,\n          size: 11,\n          color,\n        });\n      } else {\n        // Eingezogene Bullets bleiben echte Stichpunkte\n        const x = 60;              // etwas eingerückt\n        const bulletChar = '- ';\n        const display = bulletChar + body;\n        const color = colorForLine(display);\n    \n        ensureSpace(1, 11);\n        cursorY = wrapText(page, display, x, cursorY, {\n          font: fontRegular,\n          size: 11,\n          color,\n        });\n      }\n    \n      continue;\n    }\n\n\n    // nummerierte Listen\n    const orderedMatch = line.match(/^\\s*\\d+\\.\\s+(.*)$/);\n    if (orderedMatch) {\n      const display = cleanInline(line);\n      const color = colorForLine(display);\n      ensureSpace(1, 11);\n      cursorY = wrapText(page, display, 40, cursorY, {\n        font: fontRegular,\n        size: 11,\n        color,\n      });\n      continue;\n    }\n\n    // normaler Absatz\n    const display = cleanInline(line);\n    const color = colorForLine(display);\n    ensureSpace(2, 11);\n    cursorY = wrapText(page, display, 40, cursorY, {\n      font: fontRegular,\n      size: 11,\n      color,\n    });\n  }\n\n  const pdfBytes = await pdfDoc.save();\n  const pdfBase64 = Buffer.from(pdfBytes).toString('base64');\n\n  return [\n    {\n      json: data,\n      binary: {\n        report: {\n          data: pdfBase64,\n          mimeType: 'application/pdf',\n          fileName: 'manager-agent-report.pdf',\n        },\n      },\n    },\n  ];\n}\n\nreturn run();\n"
+    },
+    {
+      "parameters": {
+        "jsCode": "const { PDFDocument, StandardFonts, rgb } = require('pdf-lib');\n\n// --- Hilfsfunktionen ---\nfunction sanitize(text) {\n  if (!text) return '';\n  let t = String(text);\n  t = t.replace(/\\u202F/g, ' ');\n  // Bereinigung von nicht-druckbaren Zeichen\n  t = t.split('').map(ch => (ch.charCodeAt(0) > 255 ? ' ' : ch)).join('');\n  return t;\n}\n\nfunction cleanInline(text) {\n  if (!text) return '';\n  // Entfernt Markdown-Syntax wie **fett** oder `code` für das PDF\n  return text\n    .replace(/\\*\\*(.*?)\\*\\*/g, '$1')\n    .replace(/__(.*?)__/g, '$1')\n    .replace(/`([^`]+)`/g, '$1');\n}\n\nasync function run() {\n  const item = items[0];\n  const data = item.json || {};\n  const binary = item.binary || {};\n\n  // 1. Daten aus dem JSON mappen\n  const url = sanitize(data.url || 'unbekannte URL');\n  const agentName = \"GAA\";\n  const timestamp = new Date().toISOString().slice(0, 19).replace('T', ' ');\n\n  // WICHTIG: Zugriff auf die verschachtelten Statistiken\n  const stats = data.details?.stats || { total_issues: 0, critical: 0 };\n  \n  // WICHTIG: Wir nutzen den fertigen Markdown-Text aus dem vorherigen Node\n  const md = sanitize(data.reportMarkdown || '');\n\n  // PDF Setup\n  const pdfDoc = await PDFDocument.create();\n  let page = pdfDoc.addPage();\n  let { width, height } = page.getSize();\n\n  const fontRegular = await pdfDoc.embedFont(StandardFonts.Helvetica);\n  const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);\n\n  let cursorY = height - 40;\n\n  // --- Layout Helper ---\n  function ensureSpace(linesNeeded, fontSize = 11) {\n    if (cursorY - (linesNeeded * (fontSize + 4)) < 40) {\n      page = pdfDoc.addPage();\n      cursorY = height - 40;\n    }\n  }\n\n  function drawTextLine(text, opts = {}) {\n    const size = opts.size || 11;\n    const font = opts.font || fontRegular;\n    const color = opts.color || rgb(0, 0, 0);\n    const indent = opts.indent || 40;\n    const maxWidth = width - indent - 40;\n\n    const words = text.split(' ');\n    let line = '';\n\n    for (const w of words) {\n      const testLine = line ? line + ' ' + w : w;\n      const wWidth = font.widthOfTextAtSize(testLine, size);\n      if (wWidth > maxWidth) {\n        ensureSpace(1, size);\n        page.drawText(line, { x: indent, y: cursorY, size, font, color });\n        cursorY -= (size + 4);\n        line = w;\n      } else {\n        line = testLine;\n      }\n    }\n    if (line) {\n      ensureSpace(1, size);\n      page.drawText(line, { x: indent, y: cursorY, size, font, color });\n      cursorY -= (size + 4);\n    }\n  }\n\n  // --- PDF Header ---\n  \n  // Titel\n  page.drawText(`${agentName} Report`, { x: 40, y: cursorY, size: 18, font: fontBold });\n  cursorY -= 30;\n\n  // Metadaten\n  drawTextLine(`URL: ${url}`);\n  drawTextLine(`Zeitstempel: ${timestamp}`);\n  \n  // Stats Zeile (Rot wenn Fehler)\n  const statsColor = stats.total_issues > 0 ? rgb(0.8, 0, 0) : rgb(0, 0.5, 0);\n  drawTextLine(`Gesamte Fehler: ${stats.total_issues} (Kritisch: ${stats.critical})`, { \n      font: fontBold, \n      color: statsColor \n  });\n  cursorY -= 20;\n\n  // --- PDF Body (aus Markdown) ---\n  \n  const lines = md.split(/\\r?\\n/);\n\n  for (const rawLine of lines) {\n    let line = rawLine.trimEnd();\n    if (!line.trim()) {\n        cursorY -= 6;\n        continue;\n    }\n\n    // Überschriften (###)\n    const headingMatch = line.match(/^(#{1,6})\\s+(.*)$/);\n    if (headingMatch) {\n        const text = cleanInline(headingMatch[2]);\n        ensureSpace(2, 12);\n        \n        // Farbe für \"CRITICAL\" im Titel\n        let color = rgb(0, 0, 0);\n        if (text.includes('CRITICAL') || text.includes('🔴')) color = rgb(0.8, 0, 0);\n        \n        drawTextLine(text, { font: fontBold, size: 12, color });\n        cursorY -= 4;\n        continue;\n    }\n\n    // Listenpunkte\n    const listMatch = line.match(/^\\s*[-*]\\s+(.*)$/);\n    if (listMatch) {\n        const text = cleanInline(listMatch[1]);\n        drawTextLine('• ' + text, { indent: 55, size: 10 });\n        continue;\n    }\n\n    // Normaler Text\n    drawTextLine(cleanInline(line));\n  }\n\n  // PDF speichern\n  const pdfBytes = await pdfDoc.save();\n  const pdfBase64 = Buffer.from(pdfBytes).toString('base64');\n\n  return [\n    {\n      json: data,\n      binary: {\n        report: {\n          data: pdfBase64,\n          mimeType: 'application/pdf',\n          fileName: 'gaa-agent-report.pdf',\n        },\n        ...(binary.screenshot ? { screenshot: binary.screenshot } : {}),\n      },\n    },\n  ];\n}\n\nreturn run();"
+    },
+    {
+      "parameters": {
+        "jsCode": "const inputItem = $input.first().json;\n\nreturn {\n  json: {\n    agent_name: inputItem.agent_name || \"CSA\",\n    wcag_criterion: inputItem.wcag_criterion,\n    status: inputItem.status,\n    executive_summary: inputItem.executive_summary,\n    detailed_results: inputItem.detailed_results,\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3056,
+        4896
+      ],
+      "id": "bedd8d7a-925e-4fe0-a301-c553812d485e",
+      "name": "Build PDF"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "OpenAI Chat Model2": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Manager",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chat": {
+      "main": [
+        [
+          {
+            "node": "URL checken",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "URL checken": {
+      "main": [
+        [
+          {
+            "node": "passt URL?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "passt URL?": {
+      "main": [
+        [
+          {
+            "node": "Manager",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manager": {
+      "main": [
+        [
+          {
+            "node": "Build PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RAG": {
+      "ai_tool": [
+        [
+          {
+            "node": "Manager",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GAA": {
+      "ai_tool": [
+        []
+      ]
+    },
+    "VFA": {
+      "ai_tool": [
+        [
+          {
+            "node": "Manager",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CSA": {
+      "ai_tool": [
+        [
+          {
+            "node": "Manager",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "Manager",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build PDF": {
+      "main": [
+        [
+          {
+            "node": "Upload file",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "saveExecutionProgress": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false,
+    "errorWorkflow": "YOUR_WORKFLOW_ID",
+    "timeSavedPerExecution": 5
+  },
+  "versionId": "898e07f4-0aa7-4188-9c96-d61e5ffcc991",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "YOUR_INSTANCE_ID"
+  },
+  "id": "YOUR_WORKFLOW_ID",
+  "tags": []
+}
