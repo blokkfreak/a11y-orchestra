@@ -41,7 +41,7 @@ Das System implementiert das **Supervisor-Worker-Pattern** über drei operative 
 
 ### 1. Orchestration Layer
 
-Einstiegspunkt ist ein interaktives Interface. Der vorgeschaltete Workflow `URLCheck` validiert und normalisiert die Ziel-URL (Entfernung von PII und Tracking-Parametern). Der `Manager-Agent` (GPT-4o, Memory Buffer) steuert den Ablauf: Er wählt zielgerichtet Worker-Agenten aus, evaluiert Zwischenstände und fragt bei Bedarf die Wissensbasis ab.
+Einstiegspunkt ist ein interaktives Interface. Der vorgeschaltete Prüfungsschritt (Node `URL checken`) validiert und normalisiert die Ziel-URL (Entfernung von PII und Tracking-Parametern). Der `Manager-Agent` (GPT-4o, Memory Buffer) steuert den Ablauf: Er wählt zielgerichtet Worker-Agenten aus, evaluiert Zwischenstände und fragt bei Bedarf die Wissensbasis ab.
 
 ### 2. Specialized Agent Layer
 
@@ -132,9 +132,10 @@ a11y-orchestra/
 4. **Workflows in n8n laden:**
    - Öffne `http://localhost:5678` im Browser.
    - Importiere die JSON-Dateien aus dem Verzeichnis `workflows/`.
-   - Starte den RAG-Ingest-Workflow einmalig, um die Qdrant-Vektordatenbank mit den WCAG-Dokumenten zu initialisieren.
+   - Hinterlege deine OpenAI-Zugangsdaten unter Credentials in n8n (bzw. verknüpfe den OpenAi-Account in den importierten Nodes).
+   - Führe im Workflow `RAG-Agent` den Ingest-Pfad einmalig aus, um die Qdrant-Vektordatenbank mit den WCAG-Dokumenten zu initialisieren.
 
-> Hinweis: Alle produktiven API-Keys, Credential-IDs und Drive-Pfade in den Workflow-Dateien wurden vor dem Commit durch neutrale Platzhalter ersetzt.
+> Hinweis: Alle produktiven API-Keys, Credential-IDs und Drive-Pfade in den Workflow-Dateien wurden vor dem Commit durch neutrale Platzhalter ersetzt und müssen nach dem Import mit deinen eigenen Zugangsdaten verknüpft werden.
 
 
 ## Evaluation und Ergebnisse

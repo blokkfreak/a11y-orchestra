@@ -26,3 +26,6 @@ jobs:
 
       - name: Validate Runner Scripts Syntax
         run: node -c runner/*.js
+
+      - name: Validate Workflow JSON Files
+        run: node -e "const fs = require('fs'); fs.readdirSync('workflows').filter(f => f.endsWith('.json')).forEach(f => JSON.parse(fs.readFileSync('workflows/' + f, 'utf8')))"
