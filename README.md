@@ -1,88 +1,149 @@
 # A11y-Orchestra
 
-Orchestriertes Multi-Agenten-System zur automatisierten Prüfung digitaler Web-Accessibility. Kombiniert regelbasierte Test-Runner (Pa11y, axe-core) mit multimodalen LLMs und RAG auf Basis von n8n, um kontextabhängige Barrieren nach WCAG 2.2 zu identifizieren.
+[![WCAG 2.2](https://img.shields.io/badge/WCAG-2.2_AA_%26_AAA-005A9C?style=flat-square)](https://www.w3.org/TR/WCAG22/)
+[![n8n](https://img.shields.io/badge/Orchestration-n8n_v1.117-EA4B71?style=flat-square)](https://n8n.io)
+[![Docker](https://img.shields.io/badge/Container-Docker_Compose-2496ED?style=flat-square)](https://www.docker.com/)
+[![Playwright](https://img.shields.io/badge/Engine-Playwright-2EAD33?style=flat-square)](https://playwright.dev/)
+[![Qdrant](https://img.shields.io/badge/Vector_DB-Qdrant-dc2626?style=flat-square)](https://qdrant.tech/)
+[![OpenAI](https://img.shields.io/badge/LLM-GPT--4o_Vision-412991?style=flat-square)](https://openai.com/)
+[![License](https://img.shields.io/badge/License-MIT-blue?style=flat-square)](LICENSE)
+[![Academic](https://img.shields.io/badge/HTWK_Leipzig-B.Sc._Medieninformatik-003366?style=flat-square)](https://www.htwk-leipzig.de/)
 
-Entwickelt als Bachelorarbeit im Studiengang Medieninformatik (HTWK Leipzig).
+Orchestriertes Multi-Agenten-System zur automatisierten Prüfung digitaler Web-Accessibility. Das System kombiniert regelbasierte Test-Runner (Pa11y, axe-core) mit multimodalen LLMs und RAG auf Basis von n8n, um kontextabhängige Barrieren nach WCAG 2.2 reproduzierbar zu identifizieren.
+
+Entwickelt als Bachelorarbeit im Studiengang Medieninformatik an der HTWK Leipzig.
+
+
+## Kernmerkmale
+
+- **Hybrides Audit-Modell**: Syntaktische Regelprüfungen (axe-core, Pa11y) werden mit semantischer visueller Analyse (GPT-4o Vision) verknüpft, um bisher rein manuell prüfbare Kriterien automatisiert abzudecken.
+- **Supervisor-Worker-Architektur**: Ein zentraler Manager-Agent steuert spezialisierte Worker bedarfsgerecht und aggregiert die Einzelergebnisse.
+- **RAG-gestützte Behebung**: Eine Qdrant-Vektordatenbank mit indizierten WCAG-2.2-Spezifikationen liefert semantisch passende Codebeispiele und Sanierungsempfehlungen.
+- **Automatisierte PDF-Berichte**: Generierung strukturierter Einzelberichte pro Prüfbereich sowie eines konsolidierten Management-Reports via `pdf-lib`.
 
 
 ## Motivation
 
-Der Ausgangspunkt war ein Webinar zur digitalen Barrierefreiheit während meiner Arbeit in einer Marketingagentur. Dort wurde der *WebAIM Million Report* vorgestellt: Über 90 % der meistbesuchten Websites weisen automatisiert erkennbare WCAG-Verstöße auf - eine Fehlerquote, die seit Jahren stagniert.
+Der Ausgangspunkt war ein Fachwebinar zur digitalen Barrierefreiheit während einer Tätigkeit in einer Digitalagentur. Der zugrunde liegende *WebAIM Million Report* belegt: Über 90 Prozent der meistbesuchten Websites weisen automatisiert erkennbare WCAG-Verstöße auf, wobei die Fehlerquote seit Jahren stagniert.
 
-Klassische Tools wie axe-core oder Pa11y sind stark bei syntaktischer Code-Prüfung, scheitern aber systembedingt an kontextabhängigen Kriterien - z. B. ob ein Tastaturfokus-Indikator tatsächlich sichtbar ist oder ob ein CAPTCHA eine barrierefreie Alternative hat. Diese Lücken erfordern bislang aufwändige manuelle Audits.
+Klassische Audit-Werkzeuge wie axe-core oder Pa11y sind effektiv bei syntaktischer Code-Analyse, scheitern jedoch systembedingt an visuellen und kontextabhängigen Anforderungen:
+- Ist ein Tastaturfokus-Indikator tatsächlich sichtbar oder wird er durch Sticky-Elemente verdeckt?
+- Bietet ein Authentifizierungs-Schritt eine barrierefreie Alternative zu kognitiven Funktionstests?
 
-**A11y-Orchestra** verbindet regelbasierte Prüfung mit Vision-LLMs und RAG, um genau diese semantische Lücke zu schließen - und Barrierefreiheitstests für Entwicklungsteams ohne Accessibility-Expertise zugänglich zu machen.
+Solche Lücken erforderten bislang aufwändige manuelle Prüfungen. **A11y-Orchestra** schließt diese semantische Lücke durch den gezielten Einsatz multimodaler KI-Agenten und macht standardisierte Barrierefreiheitstests für Entwicklungsteams ohne tiefes Vorwissen zugänglich.
 
 
 ## Systemarchitektur
 
-Das System folgt dem **Supervisor-Worker-Pattern** und ist in drei Ebenen aufgeteilt:
+Das System implementiert das **Supervisor-Worker-Pattern** über drei operative Ebenen:
 
 ![Systemarchitektur](architecture.png)
 
 ### 1. Orchestration Layer
 
-Einstiegspunkt ist ein Chat-Interface. Der Workflow `URLCheck` bereinigt und normalisiert die Eingabe-URL (Tracking-Parameter, PII). Der `Manager-Agent` (GPT-4o, Simple Memory Buffer) koordiniert den Ablauf: Er entscheidet, welche Worker ausgeführt werden, wertet deren Ergebnisse aus und zieht bei Bedarf den RAG-Agenten hinzu.
+Einstiegspunkt ist ein interaktives Interface. Der vorgeschaltete Workflow `URLCheck` validiert und normalisiert die Ziel-URL (Entfernung von PII und Tracking-Parametern). Der `Manager-Agent` (GPT-4o, Memory Buffer) steuert den Ablauf: Er wählt zielgerichtet Worker-Agenten aus, evaluiert Zwischenstände und fragt bei Bedarf die Wissensbasis ab.
 
 ### 2. Specialized Agent Layer
 
-Worker-Agents sind eigenständige n8n-Sub-Workflows, die vom Manager als Tools aufgerufen werden:
+Die Worker-Agenten sind eigenständige n8n-Sub-Workflows, die vom Manager über Tool-Schnittstellen instanziiert werden:
 
-- **GAA Agent (Layout/Target Size)**: Führt axe-core und Pa11y aus; GPT-4o-mini priorisiert WCAG-2.5.8-Verstöße (Target Size)
-- **VFA Agent (Focus Visibility)**: Erstellt Screenshots via Playwright und prüft per Vision API, ob fokussierte Elemente durch Sticky-Header, Modals oder Overlays verdeckt sind (WCAG 2.4.11)
-- **CSA Agent (Authentication)**: Scannt Login-Seiten auf kognitive Barrieren (CAPTCHAs ohne Alternative) - visuell und strukturell (WCAG 3.3.8 / 3.3.9)
-- **RAG Agent (WCAG Knowledge)**: Semantische Wissensdatenbank. Ingest-Pfad: W3C WCAG-Spezifikation -> Qdrant-Vektordatenbank. Query-Pfad: semantische Suche für Behebungsvorschläge
+- **GAA (General Accessibility Agent)**: Führt axe-core und Pa11y im Headless-Browser aus. GPT-4o-mini analysiert und priorisiert Verstöße gegen WCAG 2.5.8 (Target Size Minimum).
+- **VFA (Visual Focus Agent)**: Navigiert interaktive DOM-Elemente via Playwright, erzeugt Screenshots und prüft per Vision-Modell, ob aktive Fokus-Zustände durch Overlays, Modals oder Sticky-Header verdeckt werden (WCAG 2.4.11 / 2.4.12).
+- **CSA (Cognitive Security Agent)**: Überprüft Authentifizierungs- und Anmeldeseiten auf kognitive Barrieren (CAPTCHAs, Rätsel) und verifiziert das Vorhandensein barrierefreier Alternativen (WCAG 3.3.8 / 3.3.9).
+- **RAG-Agent (WCAG Knowledge Base)**: Vektorielle Wissensbasis. Der Ingest-Pfad verarbeitet die W3C-WCAG-2.2-Dokumentation in Chunks und speichert Embeddings in Qdrant. Der Query-Pfad liefert dem Manager präzise Handlungs- und Code-Empfehlungen.
 
-### 3. Infrastructure & Output
+### 3. Infrastructure & Reporting Layer
 
-- **Chat-Interface**: Steuerung und Report-Ausgabe
-- **PDF-Reports**: Jeder Agent erzeugt via `pdf-lib` einen Einzel-Report (Upload zu Google Drive). Der Manager konsolidiert alles in einem Gesamtbericht
+- **Chat-Interface**: Steuerung, Statusausgabe und interaktive Abfrage.
+- **PDF-Reporting**: Jeder Agent erzeugt über `pdf-lib` einen normierten Einzelbericht. Der Manager führt alle Teilergebnisse in einem konsolidierten Abschlussbericht zusammen.
 
 
 ## Tech Stack
 
-| Komponente              | Technologie                 | Version            |
-| ----------------------- | --------------------------- | ------------------ |
-| Orchestrierung          | n8n (Self-Hosted)           | v1.117.3           |
-| Vektordatenbank         | Qdrant                      | latest             |
-| LLMs                    | OpenAI GPT-4o / GPT-4o-mini | Vision & Chat APIs |
-| Browser-Automatisierung | Playwright / Puppeteer-Core | v1.56.1 / v22      |
-| PDF-Erstellung          | pdf-lib                     | latest             |
-| Runtime                 | Node.js                     | v20 (Slim)         |
-
-**Repo-Struktur:**
-
-- `runner/` - JavaScript-Skripte für Playwright/Puppeteer (axe-core, pa11y, Screenshots, DOM-Extraktion)
-- `workflows/` - bereinigte n8n-Workflow-JSONs zum Import
-- `agent-reports/` - Beispiel-PDFs aus realen Testläufen
+| Komponente | Technologie | Version / Typ | Zweck |
+| :--- | :--- | :--- | :--- |
+| **Orchestrierung** | n8n (Self-Hosted) | v1.117.3 | Workflow- und Agentensteuerung |
+| **Vektordatenbank** | Qdrant | latest (Docker) | Speicherung von WCAG-Dokument-Embeddings |
+| **LLMs** | OpenAI GPT-4o / GPT-4o-mini | Chat & Vision APIs | Visuelle Inspektion, Entscheidungsfindung, RAG |
+| **Automatisierung** | Playwright / Puppeteer-Core | v1.56.1 / v22 | DOM-Extraktion, Navigation, Screenshots |
+| **Regel-Runner** | axe-core / Pa11y | v4.10 / v9.0 | Syntaktische WCAG-Validierung |
+| **PDF-Erstellung** | pdf-lib | v1.17.1 | Generierung vektorbasierten Reportings |
+| **Runtime** | Node.js | v20 (Bullseye Slim) | Ausführungsumgebung |
 
 
-## Infrastruktur
+## Repository-Struktur
 
-Docker Compose orchestriert n8n (inkl. Playwright-Browser) und Qdrant in einem isolierten Bridge-Netzwerk. Der RAG-Ingest-Prozess läuft als eigenständiger Admin-Workflow (WCAG-Dokumente scrapen -> chunken -> Embeddings in Qdrant schreiben).
-
-**12-Factor-Konformität (Auszug):**
-
-- Config über `.env` (kein Hardcoding von API-Keys)
-- Backing Services (Qdrant, OpenAI API) lose gekoppelt und austauschbar
-- Zustandslose Prozesse; Persistenz extern
-- Dev/Prod-Parität via Docker
-
-
-## Evaluation
-
-- **Mixed-Methods**: Precision und Recall gemessen an kontrollierten Testdaten und realen Sites (HTWK Leipzig, Dev.to, Slack, W3C Demos)
-- **Robustheit**: Retry-Schleifen im Manager fangen fehlerhafte JSON-Antworten ab
-- **Grenzfälle**: Timing-Probleme bei SPAs und Scroll-Obstruktionen durch Sticky-Header adressiert
-
-
-## Setup
-
-```bash
-cp .env.example .env
-# OPENAI_API_KEY in .env eintragen
-docker compose up -d --build
-# n8n unter http://localhost:5678 öffnen, Workflows aus workflows/ importieren
+```text
+a11y-orchestra/
+├── .github/              # CI/CD und Repository-Konfiguration
+├── agent-reports/        # Generierte Beispiel-PDFs realer Audit-Läufe
+│   ├── csa-2025-11-20.pdf
+│   ├── gaa-2025-11-20.pdf
+│   ├── vfa-2025-11-20.pdf
+│   └── manager-2025-11-20.pdf
+├── runner/               # Node.js-Runner für Headless-Browser und Accessibility-Engines
+│   ├── axe-playwright-runner.js
+│   ├── axe-puppeteer-runner.js
+│   ├── pa11y-runner.js
+│   └── playwright-runner.js
+├── workflows/            # n8n-Workflow-Exporte (JSON)
+│   ├── A11y-Orchestra.json
+│   ├── CSA.json
+│   ├── GAA.json
+│   ├── RAG-Agent.json
+│   └── VFA.json
+├── architecture.png      # Architekturskizze des Gesamtsystems
+├── docker-compose.yml    # Multi-Container-Orchestrierung (n8n + Qdrant)
+├── Dockerfile            # Container-Image mit Playwright, n8n und Runnern
+├── package.json          # Node.js-Projektabhängigkeiten
+├── package-lock.json     # Deterministische Dependency-Pins
+├── prompts.md            # Dokumentation der System-Prompts aller Agenten
+├── .env.example          # Vorlage für Umgebungsvariablen
+└── LICENSE               # MIT-Lizenz
 ```
 
-> API-Keys, Credential-IDs und Drive-Ordner in den Workflow-JSONs sind durch Platzhalter ersetzt.
+
+## Installation und Setup
+
+### Voraussetzungen
+
+- Docker und Docker Compose
+- OpenAI API Key
+
+### Schnellstart
+
+1. **Repository klonen und vorbereiten:**
+   ```bash
+   git clone https://github.com/blokkfreak/a11y-orchestra.git
+   cd a11y-orchestra
+   ```
+
+2. **Umgebungsvariablen konfigurieren:**
+   ```bash
+   cp .env.example .env
+   ```
+   Trage deinen `OPENAI_API_KEY` in der `.env`-Datei ein.
+
+3. **Container-Stack starten:**
+   ```bash
+   docker compose up -d --build
+   ```
+
+4. **Workflows in n8n laden:**
+   - Öffne `http://localhost:5678` im Browser.
+   - Importiere die JSON-Dateien aus dem Verzeichnis `workflows/`.
+   - Starte den RAG-Ingest-Workflow einmalig, um die Qdrant-Vektordatenbank mit den WCAG-Dokumenten zu initialisieren.
+
+> Hinweis: Alle produktiven API-Keys, Credential-IDs und Drive-Pfade in den Workflow-Dateien wurden vor dem Commit durch neutrale Platzhalter ersetzt.
+
+
+## Evaluation und Ergebnisse
+
+- **Testumgebungen**: Validiert an kontrollierten Testdaten (W3C Web Accessibility Initiative Demos) sowie realen Produktionssystemen (unter anderem HTWK Leipzig, Dev.to, Slack Web).
+- **Fehlerbehandlung**: Implementierte Retry-Loops und Validierungsfilter im Supervisor fangen unvollständige LLM-Antworten ab.
+- **Edge-Cases**: Robuste Behandlung dynamischer DOM-Veränderungen bei Single Page Applications (SPAs) sowie Viewport-Verschiebungen durch Sticky-Navigationselemente.
+
+
+## Lizenz
+
+Dieses Projekt ist unter der [MIT-Lizenz](LICENSE) lizenziert.
